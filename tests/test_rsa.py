@@ -1,5 +1,10 @@
+import sys
 import unittest
-import rsa
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import rsa  # noqa: E402
 
 class PaddingRegressionTests(unittest.TestCase):
     def test_textbook_round_trip_without_padding(self):
