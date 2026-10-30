@@ -365,11 +365,14 @@ def potencia_mod_p(base:int, exp:int, p:int) -> int:
 
     Raises:
         ZeroDivisionError: Si el módulo es 0.
-        ValueError: Si el exponente es negativo.
+        ValueError: Si el exponente es negativo y la base no es invertible módulo p.
     """
     if p == 0:
         raise ZeroDivisionError("El módulo no puede ser cero.")
-    result = 1
+    if exp < 0:
+        base = inversa_mod_p(base % p, p)
+        exp = -exp
+    result = 1 % p
     base = base % p
     while exp > 0:
         if exp % 2 == 1:
@@ -423,8 +426,8 @@ def euler(n:int)->int:
         return 1
     factores = factorizar(n)
     for p in factores:
-        n *= (1 - 1 / p)
-    return int(n)
+        n = n // p * (p - 1)  # aritmética entera: sin errores de redondeo para n grande
+    return n
 
 def legendre(n:int,p:int)->int:
     """
@@ -508,21 +511,45 @@ def resolver_sistema_congruencias(alist:List[int],blist:List[int],plist:List[int
             m = lcm
     return r % m, m
 
-def raiz_mod_p(n, p):
+def raiz_mod_p(n: int, p: int) -> List[int]:
     """
-    Encuentra la raíz cuadrada de n mod p si p ≡ 3 mod 4, que es el caso más simple.
-    Devuelve la raíz si existe o None si no existe.
-    
+    Calcula todas las raíces cuadradas de n módulo un primo p con el algoritmo de Tonelli-Shanks,
+    válido para cualquier primo (no solo p ≡ 3 mod 4).
+
     Args:
-        n (int): Número del que se quiere encontrar la raíz cuadrada.
-        p (int): Número primo módulo.
+        n (int): Número del que se quiere la raíz cuadrada.
+        p (int): Número primo.
 
     Returns:
-        int: Raíz cuadrada de n módulo p si existe, None si no existe.
+        List[int]: Raíces x con 0 <= x < p y x^2 ≡ n (mod p), ordenadas. Lista vacía si no existen.
+
+    Raises:
+        ValueError: Si p no es primo.
     """
-    if potencia_mod_p(n, (p - 1) // 2, p) != 1:
-        return None  # Por si no hay solución (no es un residuo cuadrático)
-    return potencia_mod_p(n, (p + 1) // 4, p)
+    if not es_primo(p):
+        raise ValueError("El módulo debe ser un número primo.")
+    n %= p
+    if n == 0 or p == 2:
+        return [n]
+    if legendre(n, p) != 1:
+        return []
+    # p - 1 = q * 2^s con q impar
+    q, s = p - 1, 0
+    while q % 2 == 0:
+        q //= 2
+        s += 1
+    z = 2
+    while legendre(z, p) != -1:
+        z += 1
+    m, c, t, r = s, potencia_mod_p(z, q, p), potencia_mod_p(n, q, p), potencia_mod_p(n, (q + 1) // 2, p)
+    while t != 1:
+        i, t2 = 0, t
+        while t2 != 1:
+            t2 = t2 * t2 % p
+            i += 1
+        b = potencia_mod_p(c, 1 << (m - i - 1), p)
+        m, c, t, r = i, b * b % p, t * b * b % p, r * b % p
+    return sorted({r, p - r})
 
 def ecuacion_cuadratica(a: int, b: int, c: int, p: int):
     """
@@ -548,17 +575,15 @@ def ecuacion_cuadratica(a: int, b: int, c: int, p: int):
         raise ValueError("El valor de p debe ser un número primo")
     if a == 0:
         raise ZeroDivisionError("a no puede ser 0 en una ecuación cuadrática")
-    discriminante = (b**2 - 4*a*c) % p  
-    raiz_discriminante = raiz_mod_p(discriminante, p)
-    if raiz_discriminante is None:
+    discriminante = (b**2 - 4*a*c) % p
+    raices = raiz_mod_p(discriminante, p)
+    if not raices:
         return "NE"
-    inverso_2a = potencia_mod_p(2 * a, p - 2, p)
-    x1 = (-b + raiz_discriminante) * inverso_2a % p
-    x2 = (-b - raiz_discriminante) * inverso_2a % p
-    if x1 == x2:
-        return (x1,x1)
-    else:
-        return (min(x1, x2), max(x1, x2))
+    inverso_2a = inversa_mod_p(2 * a % p, p) if p != 2 else 1
+    soluciones = sorted({(-b + r) * inverso_2a % p for r in raices})
+    if p == 2:  # 2a ≡ 0 (mod 2): se comprueban directamente los dos candidatos
+        soluciones = [x for x in (0, 1) if (a * x * x + b * x + c) % 2 == 0] or "NE"
+    return tuple(soluciones)
 
 
 
